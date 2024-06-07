@@ -1,3 +1,6 @@
+import json
+import os
+
 import pytest
 import requests
 
@@ -22,9 +25,16 @@ def test_get_store_inventory(method, url, payload, status):
 def test_add_pet(url_post, payload, status_post, url_get,status_get):
     post_response = session.request(method='POST', url=url_post, json=payload)
     assert post_response.status_code == status_post
+    response_data = post_response.json()
     url_get = url_get % post_response.json()["id"]
     get_response = session.request(method='GET', url=url_get)
     assert get_response.status_code == status_get
+    open('file.txt', 'wb')
+    files = {'file': ('file.txt', open('file.txt', 'rb'),'multipart/form-data')}
+    post_response_add_img = requests.post( f'{URL}pet/%s/uploadImage' % response_data["id"], files=files)
+    assert post_response_add_img.status_code == 200
+    delete_response = session.request(method='DELETE', url=url_get)
+    os.remove('file.txt')
 
 
 @pytest.mark.parametrize("url_post,payload,status_post,url_get,statu_delete,status_get", [
@@ -47,20 +57,24 @@ def test_update_pet(url_post, payload, status_post, url_get, statu_put, status_g
     post_response = session.request(method='POST', url=url_post, json=payload)
     assert post_response.status_code == status_post
     response_data = post_response.json()
-    url_get = url_get % response_data["id"]
     response_data['name'] = name
-    put_response = session.request(method='PUT', url=url_get, json=response_data)
+    put_response = session.request(method='PUT', url= f"{URL}pet", json=response_data)
     assert put_response.status_code == statu_put
-    get_response = session.request(method='GET', url=url_get)
+    get_response = session.request(method='GET', url=url_get % response_data["id"])
     assert get_response.status_code == status_get
     assert get_response.json()['name'] == name
 
 
-def test_params():
+@pytest.mark.parametrize("url,status,exists", [
+    (f"{URL}pet/findByStatus", "available", True),
+    (f"{URL}pet/findByStatus", "errorstatus", False),
+    ])
+def test_params(url, status, exists):
     get_response = requests.get(
-        url=f"{URL}pet/findByStatus",
-        params={"status": "available"},
+        url=url,
+        params={"status": status},
         headers={"accept": "application/json"}
     )
     data = get_response.json()
+    assert bool(len(data)) == exists
     assert get_response.status_code == 200
